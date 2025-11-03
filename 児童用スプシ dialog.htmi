@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #0d47a1 0%, #81d4fa 100%); display: flex; }
+    .form-container { width: 60%; height: 100%; padding: 30px 40px; background-color: rgba(255, 255, 255, 0.98); box-sizing: border-box; display: flex; flex-direction: column; }
+    .history-container { width: 40%; height: 100%; padding: 30px 40px; box-sizing: border-box; overflow-y: auto; }
+    .form-content { flex-grow: 1; overflow-y: auto; min-height: 0; padding-right: 15px; }
+    .form-container h1 { color: #0d47a1; font-size: 28px; margin-top: 0; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: bold; margin-bottom: 8px; color: #1565c0; font-size: 16px; }
+    input[type="text"] { width: 98%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+    textarea { width: 98%; font-size: 18px; line-height: 1.6; padding: 12px; border: 1px solid #ccc; border-radius: 4px; resize: none; overflow-y: hidden; box-sizing: border-box; min-height: 50px; }
+    .date-time-group { display: flex; gap: 20px; }
+    .date-time-group .form-group { flex: 1; }
+    .history-container h2 { color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); margin-top: 0; font-size: 28px; }
+    .history-card { background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .history-card .unit-title { font-size: 20px; font-weight: bold; color: #0d47a1; margin-bottom: 8px;}
+    .history-card .goal-title { font-size: 16px; color: #555; border-left: 4px solid #1e88e5; padding-left: 10px; margin-bottom: 15px;}
+    .history-card .reflection-item { font-size: 16px; margin-bottom: 8px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }
+    .history-card .reflection-item span { color: #777; margin-right: 10px; font-weight: bold; }
+
+    /* --- ★★★ 変更点：先生のコメント欄のスタイルを追加 ★★★ --- */
+    .feedback-comment {
+      background-color: #e3f2fd; /* 薄い水色 */
+      border: 1px solid #90caf9; /* 少し濃い水色 */
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 15px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .feedback-comment::before {
+      content: '先生からのコメント';
+      display: block;
+      font-weight: bold;
+      color: #1565c0; /* 濃い青 */
+      margin-bottom: 8px;
+    }
+    /* --- 変更ここまで --- */
+    
+    .button-area { flex-shrink: 0; padding-top: 15px; }
+    button { background: linear-gradient(to bottom, #2196f3, #1976d2); color: white; border: none; padding: 15px 30px; border-radius: 5px; font-size: 18px; font-weight: bold; cursor: pointer; }
+    #status { margin-top: 15px; font-weight: bold; text-align: center; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <!-- HTML部分は変更なし -->
+  <div class="form-container">
+    <h1>今日のふりかえりを入力</h1>
+    <div class="form-content">
+      <div class="form-group"><label for="unit-name">単元名</label><input type="text" id="unit-name"></div>
+      <div class="form-group"><label for="main-goal">単元を貫く課題</label><input type="text" id="main-goal"></div>
+      <div class="date-time-group">
+        <div class="form-group"><label for="reflection-date">日付</label><input type="text" id="reflection-date" placeholder="例: 10/4"></div>
+        <div class="form-group"><label for="reflection-lesson">時間</label><input type="text" id="reflection-lesson" placeholder="例: 1時間目"></div>
+      </div>
+      <label for="reflection-text">ふりかえり</label>
+      <textarea id="reflection-text" oninput="autoResize(this)"></textarea>
+    </div>
+    <div class="button-area">
+      <div id="status"></div>
+      <button id="submit-btn" type="button" onclick="submitForm()">この内容で提出する</button>
+    </div>
+  </div>
+  <div class="history-container">
+    <h2>これまでの記録</h2>
+    <div id="past-entries"></div>
+  </div>
+
+  <script>
+    const pastEntries = <?!= JSON.stringify(pastEntries) ?>;
+    const lastUnitInfo = <?!= JSON.stringify(lastUnitInfo) ?>;
+
+    window.onload = function() {
+      document.getElementById('unit-name').value = lastUnitInfo.unitName || '';
+      document.getElementById('main-goal').value = lastUnitInfo.mainGoal || '';
+      renderPastEntries();
+      autoResize(document.getElementById('reflection-text'));
+    };
+
+    function autoResize(element) { element.style.height = 'auto'; element.style.height = (element.scrollHeight) + 'px'; }
+
+    // --- ★★★ 変更点：カード生成時にコメント欄を追加する ★★★ ---
+    function renderPastEntries() {
+      const container = document.getElementById('past-entries');
+      if (pastEntries.length === 0) {
+        container.innerHTML = '<p style="color:white; font-size: 18px;">まだ記録はありません。</p>';
+        return;
+      }
+      // (グループ化のロジックは変更なし)
+      const grouped = pastEntries.reduce((acc, entry) => {
+        const key = entry.timestamp + '||' + entry.unitName + '||' + entry.mainGoal;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(entry);
+        return acc;
+      }, {});
+      
+      for (const key in grouped) {
+        const entries = grouped[key];
+        const [timestamp, unitName, mainGoal] = key.split('||');
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        
+        let content = `<div class="unit-title">${unitName}</div><div class="goal-title">${mainGoal}</div>`;
+        
+        entries.forEach(entry => {
+          content += `<div class="reflection-item"><span>${entry.date} (${entry.lesson})</span> ${entry.text}</div>`;
+          // もしフィードバックコメントがあれば、表示用のdivを追加する
+          if (entry.feedback) {
+            content += `<div class="feedback-comment">${entry.feedback}</div>`;
+          }
+        });
+        
+        card.innerHTML = content;
+        container.appendChild(card);
+      }
+    }
+    
+    // (submitForm関数は変更なし)
+    function submitForm() {
+      const submitBtn = document.getElementById("submit-btn");
+      const statusDiv = document.getElementById("status");
+      submitBtn.disabled = true;
+      statusDiv.textContent = "送信しています...";
+      const data = {
+        unitName: document.getElementById('unit-name').value,
+        mainGoal: document.getElementById('main-goal').value,
+        date: document.getElementById('reflection-date').value,
+        lesson: document.getElementById('reflection-lesson').value,
+        text: document.getElementById('reflection-text').value
+      };
+      google.script.run
+        .withSuccessHandler(response => {
+          statusDiv.style.color = "green"; statusDiv.textContent = response;
+          setTimeout(() => google.script.host.close(), 2000);
+        })
+        .withFailureHandler(error => {
+          statusDiv.style.color = "red"; statusDiv.textContent = "エラー: " + error.message;
+          submitBtn.disabled = false;
+        })
+        .processReflection(data);
+    }
+  </script>
+</body>
+</html>
